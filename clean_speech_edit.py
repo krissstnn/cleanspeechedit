@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
-import customtkinter as ctk
+import json
+import threading
+from pathlib import Path
 from tkinter import filedialog
+
+import customtkinter as ctk
+
+from asr_pipeline import transcribe_audio
 
 
 def run_app():
@@ -32,50 +38,114 @@ def run_app():
             audio_label.configure(text=path)
 
     def generate():
-        if not xml_path["value"] or not audio_path["value"]:
-            status_var.set("❌ выбери файлы")
+        if not audio_path["value"]:
+            status_var.set("✘ выбери аудио")
             return
-        status_var.set("✅ Готово (демо)")
+
+        status_var.set("⏳ Транскрибирую...")
+
+        def worker():
+            try:
+                segments = transcribe_audio(audio_path["value"])
+                out_path = Path(audio_path["value"]).with_suffix(".transcript.json")
+                out_path.write_text(
+                    json.dumps(segments, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                status_var.set(f"✔ Готово: {out_path.name}")
+            except Exception as exc:  # noqa: BLE001
+                status_var.set(f"✘ Ошибка: {exc}")
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # --- UI ---
     ctk.CTkLabel(root, text="CleanSpeechEdit", font=("Inter", 22, "bold")).pack(pady=(20, 12))
 
-    ctk.CTkButton(root, text="📂 Выбрать XML", command=select_xml,
-                  fg_color="#2b3b52", hover_color="#354a66",
-                  font=("Inter", 14, "bold"), corner_radius=10, width=200).pack()
+    ctk.CTkButton(
+        root,
+        text="📂 Выбрать XML",
+        command=select_xml,
+        fg_color="#2b3b52",
+        hover_color="#354a66",
+        font=("Inter", 14, "bold"),
+        corner_radius=10,
+        width=200,
+    ).pack()
     xml_label = ctk.CTkLabel(root, text="XML не выбран", font=("Inter", 12), text_color="#94a3b8")
     xml_label.pack(pady=(4, 12))
 
-    ctk.CTkButton(root, text="🎧 Выбрать аудио", command=select_audio,
-                  fg_color="#2b3b52", hover_color="#354a66",
-                  font=("Inter", 14, "bold"), corner_radius=10, width=200).pack()
+    ctk.CTkButton(
+        root,
+        text="🎧 Выбрать аудио",
+        command=select_audio,
+        fg_color="#2b3b52",
+        hover_color="#354a66",
+        font=("Inter", 14, "bold"),
+        corner_radius=10,
+        width=200,
+    ).pack()
     audio_label = ctk.CTkLabel(root, text="Аудио не выбрано", font=("Inter", 12), text_color="#94a3b8")
     audio_label.pack(pady=(4, 20))
 
     frame_modes = ctk.CTkFrame(root, fg_color="#182238", corner_radius=14)
     frame_modes.pack(fill="x", padx=18, pady=8)
-    ctk.CTkRadioButton(frame_modes, text="Default (рекомендуется)", variable=mode_var, value="default",
-                       font=("Inter", 15, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
-    ctk.CTkLabel(frame_modes, text="Лучший баланс: чисто, но сохраняет естественность речи",
-                 font=("Inter", 12), text_color="#9aa0a6").pack(anchor="w", padx=14, pady=(0, 12))
+    ctk.CTkRadioButton(
+        frame_modes,
+        text="Default (рекомендуется)",
+        variable=mode_var,
+        value="default",
+        font=("Inter", 15, "bold"),
+    ).pack(anchor="w", padx=14, pady=(12, 4))
+    ctk.CTkLabel(
+        frame_modes,
+        text="Лучший баланс: чисто, но сохраняет естественность речи",
+        font=("Inter", 12),
+        text_color="#9aa0a6",
+    ).pack(anchor="w", padx=14, pady=(0, 12))
 
     frame_soft = ctk.CTkFrame(root, fg_color="#182238", corner_radius=14)
     frame_soft.pack(fill="x", padx=18, pady=8)
-    ctk.CTkRadioButton(frame_soft, text="Soft", variable=mode_var, value="soft",
-                       font=("Inter", 15, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
-    ctk.CTkLabel(frame_soft, text="Минимальная чистка — если спикер говорит уже хорошо",
-                 font=("Inter", 12), text_color="#9aa0a6").pack(anchor="w", padx=14, pady=(0, 12))
+    ctk.CTkRadioButton(
+        frame_soft,
+        text="Soft",
+        variable=mode_var,
+        value="soft",
+        font=("Inter", 15, "bold"),
+    ).pack(anchor="w", padx=14, pady=(12, 4))
+    ctk.CTkLabel(
+        frame_soft,
+        text="Минимальная чистка — если спикер говорит уже хорошо",
+        font=("Inter", 12),
+        text_color="#9aa0a6",
+    ).pack(anchor="w", padx=14, pady=(0, 12))
 
     frame_agg = ctk.CTkFrame(root, fg_color="#182238", corner_radius=14)
     frame_agg.pack(fill="x", padx=18, pady=8)
-    ctk.CTkRadioButton(frame_agg, text="Aggressive", variable=mode_var, value="aggressive",
-                       font=("Inter", 15, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
-    ctk.CTkLabel(frame_agg, text="Максимальная чистка — убирает повторы и весь мусор",
-                 font=("Inter", 12), text_color="#9aa0a6").pack(anchor="w", padx=14, pady=(0, 12))
+    ctk.CTkRadioButton(
+        frame_agg,
+        text="Aggressive",
+        variable=mode_var,
+        value="aggressive",
+        font=("Inter", 15, "bold"),
+    ).pack(anchor="w", padx=14, pady=(12, 4))
+    ctk.CTkLabel(
+        frame_agg,
+        text="Максимальная чистка — убирает повторы и весь мусор",
+        font=("Inter", 12),
+        text_color="#9aa0a6",
+    ).pack(anchor="w", padx=14, pady=(0, 12))
 
-    ctk.CTkButton(root, text="▶ Генерировать", command=generate,
-                  fg_color="#5b6bff", hover_color="#4b59e0",
-                  font=("Inter", 15, "bold"), corner_radius=12, width=200, height=44).pack(pady=18)
+    ctk.CTkButton(
+        root,
+        text="▶ Генерировать",
+        command=generate,
+        fg_color="#5b6bff",
+        hover_color="#4b59e0",
+        font=("Inter", 15, "bold"),
+        corner_radius=12,
+        width=200,
+        height=44,
+    ).pack(pady=18)
 
     ctk.CTkLabel(root, textvariable=status_var, font=("Inter", 13), text_color="#9aa0a6").pack(pady=(0, 10))
 
